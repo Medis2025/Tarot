@@ -152,9 +152,9 @@ footer{margin-top:12px;display:flex;align-items:center;justify-content:space-bet
 
 <script>
 /* ====== 路径配置 ====== */
-const TAROT_JSON_URL = "/cluster/home/gw/Backend_project/layout/scripts/visualLM/label_LayoutLM/layout_nodes/tune_bert/lalora/Tarot/Cards.json";
-const RAG_HTML_URL   = "tarot_rag.html";
-const BACKEND_URL    = "";
+const TAROT_JSON_URL = "./Cards.json";      // ← 改为相对路径
+const RAG_HTML_URL   = "./tarot_rag.html";  // ← 改为相对路径
+const BACKEND_URL    = "";                  // ← 无后端时留空即可
 
 /* ====== 会话 ====== */
 function getOrCreateRuntimeId(){
