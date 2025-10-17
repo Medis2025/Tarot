@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>🔮 塔罗对话 · 梦幻透明 RAG 台 · rev-B</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<style>
+:root{
+  --bg1:#f9f9ff;--bg2:#eef2ff;--bg3:#e0e7ff;
+  --glass:rgba(255,255,255,.35);--line:rgba(255,255,255,.45);
+  --text:#1e1b4b;--muted:#5b5b8a;--accent:#8b5cf6;--accent2:#0ea5e9;--gold:#fcd34d;
+  --ok:#10b981;--warn:#f59e0b;--err:#ef4444;
+  --histW: 280px;
+  --ansBg: rgba(255,255,255,.75);
+  --ansBorder: rgba(255,255,255,.65);
+  --ansShadow: 0 10px 28px rgba(114,122,214,.22);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;color:var(--text);
+  background:
+    radial-gradient(150% 150% at 80% 10%, #a5b4fc 0%, transparent 40%),
+    radial-gradient(150% 150% at 20% 90%, #fbcfe8 0%, transparent 40%),
+    linear-gradient(135deg,var(--bg1),var(--bg2) 40%, var(--bg3));
+  font-family:"Poppins","PingFang SC","Microsoft YaHei",system-ui,Segoe UI,Roboto,sans-serif;
+  overflow:hidden;
+}
+
+/* Layout */
+.app{height:100%;display:grid;grid-template-rows:auto 1fr auto;gap:12px;padding:18px}
+.header,.footer,.pane{background:var(--glass);border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(12px)}
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;
+  box-shadow:0 20px 60px rgba(180,180,255,.3),inset 0 0 0 1px rgba(255,255,255,.5)}
+.header h1{margin:0;font-size:clamp(18px,3vw,28px);letter-spacing:.4px;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;color:transparent}
+.badge{display:inline-flex;gap:6px;align-items:center;padding:6px 10px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.4);font-size:12px;color:#334155}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+
+.main{display:grid;grid-template-columns:1fr 0.7fr var(--histW);gap:12px;min-height:0;transition:grid-template-columns .28s ease;}
+.app.hist-collapsed .main{grid-template-columns:1fr 0.7fr 0;gap:12px}
+
+/* Chat */
+.pane{box-shadow:0 20px 60px rgba(180,180,255,.25),inset 0 0 0 1px rgba(255,255,255,.45)}
+.chat{display:grid;grid-template-rows:1fr auto;overflow:hidden}
+.messages{padding:14px;overflow:auto;scroll-behavior:smooth;contain:content}
+.msg{display:flex;gap:10px;margin:12px 0;align-items:flex-start}
+.msg .bubble{max-width:78%;padding:14px 16px;border-radius:16px;border:1px solid var(--ansBorder);background:var(--ansBg);box-shadow:var(--ansShadow)}
+.msg.user .bubble{background:linear-gradient(180deg,#fff7d6,#fde68a);border-color:rgba(250,204,21,.45);box-shadow:0 10px 24px rgba(250,204,21,.18)}
+.msg .avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(180deg,#c7d2fe,#a5b4fc);color:#fff;font-weight:800}
+.msg.user .avatar{background:linear-gradient(180deg,#fca5a5,#f59e0b)}
+
+/* Markdown in answer */
+.msg .bubble .md{font-size:16px;line-height:1.8;letter-spacing:.1px;color:#1f2544;font-weight:400}
+.msg .bubble .md p{margin:0 0 1em}
+.msg .bubble .md h1,.msg .bubble .md h2,.msg .bubble .md h3{margin:0 0 .65em;line-height:1.35;color:#1b1740}
+.msg .bubble .md h1{font-size:1.35rem;font-weight:700}
+.msg .bubble .md h2{font-size:1.2rem;font-weight:650}
+.msg .bubble .md h3{font-size:1.08rem;font-weight:600}
+.msg .bubble .md h3::after{content:"";display:block;margin-top:.28em;width:38px;height:2px;border-radius:2px;background:linear-gradient(90deg,rgba(139,92,246,.7),rgba(14,165,233,.55));opacity:.55}
+.msg .bubble .md ul,.msg .bubble .md ol{padding-left:1.2em;margin:.2em 0 1em}
+.msg .bubble .md li{margin:.25em 0}
+.msg .bubble .md a{color:#0ea5e9;text-decoration:none;border-bottom:1px dotted rgba(14,165,233,.45)}
+.msg .bubble .md a:hover{border-bottom-color:#0ea5e9}
+.msg .bubble .md blockquote{margin:1em 0;padding:.7em 1em;border-left:4px solid rgba(139,92,246,.45);background:linear-gradient(180deg,rgba(139,92,246,.06),rgba(14,165,233,.05));border-radius:10px;color:#27314e}
+.msg .bubble .md hr{height:1px;border:0;margin:1.1em 0;background:linear-gradient(90deg,rgba(0,0,0,.05),rgba(0,0,0,.12),rgba(0,0,0,.05));opacity:.9}
+.msg .bubble .md code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;padding:.14em .38em;border-radius:6px;background:rgba(2,6,23,.06)}
+.msg .bubble .md pre code{display:block;padding:1em;border-radius:12px;background:rgba(2,6,23,.07);overflow:auto}
+.msg .bubble .md strong,.msg .bubble .md b{font-weight:600}
+.msg .bubble .md{
+  font-size:16px; line-height:1.8; letter-spacing:.1px; color:#1f2544; font-weight:400;
+  word-break: break-word;           /* ### MOD: 英文长词可断开 */
+  overflow-wrap: anywhere;          /* ### MOD: 任何位置均可换行 */
+}
+/* 输入栏 */
+.inputBar{display:flex;gap:8px;padding:10px;border-top:1px solid rgba(255,255,255,.6);background:rgba(255,255,255,.35)}
+.inputBar input{flex:1;border:1px solid rgba(255,255,255,.7);border-radius:12px;padding:12px;background:rgba(255,255,255,.92);outline:none;color:var(--text);box-shadow:inset 0 2px 6px rgba(0,0,0,.04)}
+.inputBar button{appearance:none;border:none;border-radius:12px;padding:12px 16px;font-weight:800;letter-spacing:.2px;cursor:pointer;color:#1e1b4b}
+.btn-send{background:linear-gradient(180deg,#86efac,#34d399);box-shadow:0 8px 20px rgba(52,211,153,.28)}
+.btn-tool{background:linear-gradient(180deg,#c7d2fe,#a5b4fc)}
+.btn-stop{background:linear-gradient(180deg,#fca5a5,#f87171)}
+.inputBar button:disabled{opacity:.55;cursor:not-allowed;filter:grayscale(.35)}
+.inputBar .btn-send.is-disabled{box-shadow:none}
+
+/* 推理折叠块 */
+.reasoning details{width:100%}
+.reasoning summary{cursor:pointer;user-select:none;font-weight:700;color:#334155;outline:none;list-style:none}
+.reasoning summary::-webkit-details-marker{display:none}
+.reasoning .caret{display:inline-block;transform:rotate(90deg);transition:transform .2s ease;margin-right:6px}
+.reasoning details[open] .caret{transform:rotate(0deg)}
+.reasoning .tag{display:inline-block;margin-left:6px;font-size:12px;padding:.2em .6em;border-radius:999px;background:rgba(255,255,255,.6);border:1px solid rgba(0,0,0,.06)}
+.reasoning .md{margin-top:8px}
+
+/* Picks memory */
+.mem{padding:14px;display:grid;grid-auto-rows:min-content;gap:12px;overflow:auto}
+.cardmem{display:flex;gap:10px;align-items:flex-start;padding:10px;border-radius:14px;background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.6)}
+.cardmem .icon{font-size:20px}
+.memtitle{font-weight:800}
+.memtiny{font-size:12px;color:#475569}
+.kv{font-size:12px;color:#475569}
+
+/* History */
+.history{position:relative;padding:12px;display:grid;grid-template-rows:auto 1fr;gap:10px;overflow:hidden;transition:opacity .25s ease}
+.app.hist-collapsed .history{opacity:0;pointer-events:none}
+.histHead{display:flex;align-items:center;justify-content:space-between}
+.histBtn{appearance:none;border:none;border-radius:12px;padding:10px 12px;font-weight:800;cursor:pointer;color:#1e1b4b;background:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.7)}
+.list{overflow:auto;display:grid;gap:8px}
+.item{border:1px solid rgba(255,255,255,.7);background:rgba(255,255,255,.55);border-radius:12px;padding:10px;cursor:pointer}
+.item:hover{background:rgba(255,255,255,.7)}
+.item .t{font-weight:800;font-size:13px}
+.item .s{font-size:12px;color:#475569}
+.histToggle{position:absolute;top:50%;left:-12px;transform:translate(-100%,-50%);background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.8);padding:8px 10px;border-radius:12px;cursor:pointer;user-select:none;box-shadow:0 6px 18px rgba(180,180,255,.3);font-weight:800;color:#1e1b4b}
+
+/* Footer */
+.footer{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;color:#4b5563}
+
+/* Intro glow */
+.magic{position:fixed;inset:0;pointer-events:none;display:grid;place-items:center;background:radial-gradient(100% 120% at 50% 50%, rgba(255,255,255,.9), rgba(255,255,255,0));animation:fadeOut 1.8s ease forwards 1.1s;z-index:999}
+.magic .halo{width:220px;height:220px;border-radius:50%;background:radial-gradient(circle, rgba(167,139,250,.45), transparent 60%),radial-gradient(circle at 60% 40%, rgba(14,165,233,.35), transparent 60%),radial-gradient(circle at 40% 60%, rgba(253,224,71,.35), transparent 60%);filter:blur(22px);animation:pulse 1.6s ease-in-out infinite}
+@keyframes fadeOut{to{opacity:0;visibility:hidden}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+canvas#spark{position:fixed;inset:0;pointer-events:none;z-index:998;animation:fadeOut 1.6s ease forwards 1.2s}
+
+/* Copy hint */
+.bubble.copyable{position:relative}
+.bubble.copyable::after{content:"双击复制";position:absolute;right:10px;bottom:8px;font-size:11px;color:#64748b;opacity:.0;transition:opacity .2s}
+.bubble.copyable:hover::after{opacity:.85}
+
+/* Responsive */
+@media (max-width:1024px){:root{--histW:240px}}
+@media (max-width:860px){.app:not(.hist-collapsed) .main{grid-template-columns:1fr 0 var(--histW)}.mem{display:none}}
+</style>
+</head>
+<body>
+<div class="app" id="appRoot" aria-live="polite">
+  <div class="header">
+    <h1>🔮 塔罗对话 </h1>
+    <div class="badge" aria-label="会话状态"><span class="dot" id="statusDot" title="在线"></span> <span id="statusText">连续对话</span></div>
+  </div>
+
+  <div class="main">
+    <!-- Chat -->
+    <section class="pane chat" aria-label="聊天窗口">
+      <div class="messages" id="messages" aria-live="polite"></div>
+      <div class="inputBar">
+        <input id="prompt" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="说说你的问题与处境（感情 / 学业 / 事业 / 决策……）按 Enter 发送，Shift+Enter 换行" />
+        <button class="btn-tool" id="clear" title="清空当前会话">清空</button>
+        <button class="btn-tool btn-stop" id="stop" style="display:none" title="停止流式生成">停止</button>
+        <button class="btn-send" id="send" title="发送消息">发送</button>
+      </div>
+    </section>
+
+    <!-- Picks memory -->
+    <aside class="pane mem" aria-label="记忆卡片">
+      <div class="kv" id="meta">载入你的三张记忆卡片…</div>
+      <div id="memList"></div>
+    </aside>
+
+    <!-- History (collapsible) -->
+    <aside class="pane history" id="histPane" aria-label="历史会话">
+      <button class="histToggle" id="histToggle" aria-pressed="false" title="折叠 / 展开历史">历史</button>
+      <div class="histHead">
+        <div class="kv"><b>对话历史</b>（按时间 / 首问）</div>
+        <button id="refreshHist" class="histBtn" title="刷新历史列表">刷新</button>
+      </div>
+      <div class="list" id="histList"></div>
+    </aside>
+  </div>
+
+  <div class="footer">
+    <div>提示：重新在抽牌页选择卡片会创建新的对话；你可在右侧历史面板中随时切换。</div>
+    <div><a href="#" id="export" style="color:#1e1b4b;font-weight:800">导出会话 JSON</a></div>
+  </div>
+</div>
+
+<!-- Intro glow -->
+<div class="magic" aria-hidden="true"><div class="halo"></div></div>
+<canvas id="spark" aria-hidden="true"></canvas>
+
+<!-- Libraries: Marked + DOMPurify -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+
+<script>
+/* ========= Sparkles with visibility pause ========= */
+(function spark(){
+  const c = document.getElementById('spark'); const ctx = c.getContext('2d');
+  function resize(){ c.width = innerWidth; c.height = innerHeight; }
+  resize(); addEventListener('resize', resize);
+  const N = 80;
+  const pts = Array.from({length:N}, () => ({x: Math.random()*c.width, y: Math.random()*c.height, r: Math.random()*1.8+0.4, a: Math.random()*Math.PI*2, s: Math.random()*0.8+0.2}));
+  let t0 = performance.now(); let paused = false;
+  document.addEventListener('visibilitychange',()=>{paused = document.hidden});
+  (function loop(t){
+    const dt = (t - t0)/1000; t0 = t; if(paused){requestAnimationFrame(loop);return}
+    ctx.clearRect(0,0,c.width,c.height);
+    for(const p of pts){
+      p.a += dt * p.s; p.x += Math.cos(p.a)*8*dt; p.y += Math.sin(p.a)*8*dt;
+      if(p.x<0) p.x=c.width; if(p.x>c.width) p.x=0; if(p.y<0) p.y=c.height; if(p.y>c.height) p.y=0;
+      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*6);
+      g.addColorStop(0,'rgba(167,139,250,.75)'); g.addColorStop(1,'rgba(167,139,250,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x,p.y,p.r*6,0,Math.PI*2); ctx.fill();
+    }
+    requestAnimationFrame(loop);
+  })(performance.now());
+})();
+</script>
+
+<script>
+/* ========= Config ========= */
+const BACKEND_URL = ""; // 可改为反向代理地址
+const LS_PICKS_KEY = "tarot_picks";
+const LS_CONV_KEY_PREFIX = "tarot_conv_";
+const LS_HIST_COLLAPSED = "tarot_hist_collapsed";
+const RUNTIME_ID = localStorage.getItem("tarot_runtime_id") || `run-${Date.now()}`;
+let DIALOG_ID = localStorage.getItem("tarot_dialog_id") || `dlg-${Math.random().toString(36).slice(2,7)}`;
+
+/* ========= Elements ========= */
+const appRoot = document.getElementById('appRoot');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('prompt');
+const btnSend = document.getElementById('send');
+const btnClear = document.getElementById('clear');
+const btnStop = document.getElementById('stop');
+const btnExport = document.getElementById('export');
+const metaEl = document.getElementById('meta');
+const memListEl = document.getElementById('memList');
+const histListEl = document.getElementById('histList');
+const btnRefreshHist = document.getElementById('refreshHist');
+const histToggle = document.getElementById('histToggle');
+
+let picks = null;
+let thinking = false;
+let abortCtrl = null; // AbortController for streaming
+let conversation = []; // local cache (optional)
+let historyIndex = [];
+const nowISO = ()=> new Date().toISOString();
+
+/* ========= Utils ========= */
+const suitIcon = s => ({Major:'🃏',Wands:'🔥',Cups:'💧',Swords:'⚔️',Pentacles:'🪙'})[s] || '✨';
+function escapeHTML(s){return (s||'').replace(/[&<>'"]/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+const convKey = id => `${LS_CONV_KEY_PREFIX}${id}`;
+const saveConv = ()=> localStorage.setItem(convKey(DIALOG_ID), JSON.stringify(conversation));
+const loadConvLocal = id => { try{ return JSON.parse(localStorage.getItem(convKey(id))||'[]') }catch(e){ return []; } };
+
+function setBusy(isBusy){
+  thinking = !!isBusy;
+  btnSend.disabled = !!isBusy;
+  inputEl.disabled = !!isBusy;
+  btnStop.style.display = isBusy ? 'inline-block' : 'none';
+  btnSend.classList.toggle('is-disabled', !!isBusy);
+  statusDot.style.background = isBusy? 'var(--warn)': 'var(--ok)';
+  statusText.textContent = isBusy? '生成中…' : '连续对话';
+}
+
+/* ===== Markdown (normalize + sanitize) ===== */
+function normalizeHeadingsSafely(md){
+  if(!md) return '';
+  const lines = String(md).split('\n');
+  let inFence = false;
+  for(let i=0;i<lines.length;i++){
+    const line = lines[i];
+    if(/^(\s*)```|^(\s*)~~~/.test(line.trim())){ inFence = !inFence; continue; }
+    if(inFence) continue;
+    lines[i] = line.replace(/^(\s{0,3}#{1,6})([^\s#])/,'$1 $2');
+  }
+  return lines.join('\n');
+}
+function renderMarkdown(mdText){
+  try{
+    const src = normalizeHeadingsSafely(mdText);
+    marked.setOptions({ mangle:false, headerIds:false, breaks:true, gfm:true });
+    const dirty = marked.parse(src);
+    return DOMPurify.sanitize(dirty, {USE_PROFILES:{html:true}});
+  }catch(e){
+    return `<div class="md"><pre>${escapeHTML(mdText||'')}</pre></div>`;
+  }
+}
+
+/* ========= Message rendering ========= */
+function renderMessage(role, html, {asMarkdown=false, extraClass=''}={}){
+  const wrap = document.createElement('div');
+  wrap.className = `msg ${role==='assistant'?'bot':'user'} ${extraClass}`;
+  const body = asMarkdown ? `<div class="md">${renderMarkdown(html)}</div>` : escapeHTML(html);
+  wrap.innerHTML = `<div class="avatar" aria-hidden="true">${role==='assistant'?'AI':'我'}</div><div class="bubble ${role==='assistant'?'copyable':''}" tabindex="0">${body}</div>`;
+  const bubble = wrap.querySelector('.bubble');
+  if(role==='assistant'){
+    bubble.addEventListener('dblclick',()=>{
+      const text = bubble.innerText || '';
+      navigator.clipboard?.writeText(text).then(()=>{
+        bubble.style.outline = '2px solid rgba(14,165,233,.6)';
+        setTimeout(()=>{bubble.style.outline=''},600);
+      }).catch(()=>{});
+    });
+  }
+  messagesEl.appendChild(wrap);
+  // Scroll anchoring
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return bubble;
+}
+
+/* Foldable reasoning bubble */
+function createReasoningBubble(){
+  const wrap = document.createElement('div');
+  wrap.className = 'msg bot reasoning';
+  wrap.innerHTML = `
+    <div class="avatar">AI</div>
+    <div class="bubble">
+      <details open>
+        <summary><span class="caret">▸</span> 🧠 推理过程 <span class="tag" id="reasonTag">生成中…</span></summary>
+        <div class="md" id="reasonMd"></div>
+      </details>
+    </div>`;
+  messagesEl.appendChild(wrap);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return {wrap, details: wrap.querySelector('details'), tag: wrap.querySelector('#reasonTag'), md: wrap.querySelector('#reasonMd')};
+}
+
+/* ========= Picks / Memory ========= */
+function loadPicksFromLS(){
+  try{ picks = JSON.parse(localStorage.getItem(LS_PICKS_KEY)||'null'); }catch(e){ picks=null; }
+}
+function renderMemory(){
+  memListEl.innerHTML='';
+  if(!picks || !picks.picks || !picks.picks.length){ metaEl.textContent='未检测到抽牌结果。请返回上一页重新选择。'; return; }
+  const ts = picks.timestamp? new Date(picks.timestamp).toLocaleString(): new Date().toLocaleString();
+  metaEl.textContent = `抽牌时间：${ts} · 记忆卡：${picks.picks.length} 张`;
+  for(const p of picks.picks){
+    const card = document.createElement('div'); card.className='cardmem';
+    card.innerHTML = `
+      <div class="icon" aria-hidden="true">${suitIcon(p.suit)}</div>
+      <div>
+        <div class="memtitle">${escapeHTML(p.name_zh || p.name_en || '未知卡')} · ${p.orientation==='upright'?'正位':'逆位'}</div>
+        <div class="memtiny">${escapeHTML((p.meaning||'').slice(0,84))}${(p.meaning||'').length>84?'…':''}</div>
+      </div>`;
+    memListEl.appendChild(card);
+  }
+}
+
+/* ========= History UI ========= */
+function setHistCollapsed(collapsed){
+  appRoot.classList.toggle('hist-collapsed', !!collapsed);
+  localStorage.setItem(LS_HIST_COLLAPSED, collapsed? '1':'0');
+  histToggle.setAttribute('aria-pressed', collapsed? 'true':'false');
+}
+function renderHistory(){
+  histListEl.innerHTML='';
+  if(historyIndex.length===0){
+    const empty = document.createElement('div'); empty.className='kv'; empty.textContent='暂无对话历史。'; histListEl.appendChild(empty); return;
+  }
+  for(const h of historyIndex){
+    const it = document.createElement('div'); it.className='item';
+    const isCurrent = (h.dialog_id===DIALOG_ID);
+    const firstQ = h.user_question || h.first_question || '';
+    it.innerHTML = `<div class="t">${isCurrent?'⭐️ ':''}${escapeHTML(h.dialog_id)}</div>
+                    <div class="s">${escapeHTML(firstQ.slice(0,48))}${firstQ.length>48?'…':''}</div>`;
+    it.addEventListener('click', ()=> openDialog(h.dialog_id));
+    histListEl.appendChild(it);
+  }
+}
+
+/* ========= Backend I/O ========= */
+async function initDialogIfNeeded(){
+  try{
+    await fetch(`${BACKEND_URL}/api/dialog/init`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ runtime_id:RUNTIME_ID, dialog_id:DIALOG_ID, cards:(picks && picks.picks) ? picks.picks : [] })
+    });
+    localStorage.setItem("tarot_runtime_id", RUNTIME_ID);
+    localStorage.setItem("tarot_dialog_id", DIALOG_ID);
+  }catch(e){ /* 静默失败，走本地模式 */ }
+}
+
+async function fetchHistoryList(){
+  try{
+    const res = await fetch(`${BACKEND_URL}/api/dialog/list?runtime_id=${encodeURIComponent(RUNTIME_ID)}`);
+    if(!res.ok) throw 0; const j = await res.json();
+    historyIndex = Array.isArray(j.dialogs) ? j.dialogs : [];
+  }catch(_){ // fallback
+    historyIndex = Object.keys(localStorage)
+      .filter(k=>k.startsWith(LS_CONV_KEY_PREFIX))
+      .map(k=>({ dialog_id: k.replace(LS_CONV_KEY_PREFIX,''), first_question:'(本地草稿)', created_at:'-' }));
+  }
+  renderHistory();
+}
+
+async function openDialog(dialogId){
+  if(dialogId===DIALOG_ID) return; DIALOG_ID = dialogId; localStorage.setItem("tarot_dialog_id", DIALOG_ID);
+  let server = null;
+  try{
+    const res = await fetch(`${BACKEND_URL}/api/history?runtime_id=${encodeURIComponent(RUNTIME_ID)}&dialog_id=${encodeURIComponent(DIALOG_ID)}`);
+    if(res.ok) server = await res.json();
+  }catch(_){ }
+
+  messagesEl.innerHTML=''; conversation = [];
+  const serverHist = Array.isArray(server?.history) ? server.history : null;
+  const src = serverHist || loadConvLocal(DIALOG_ID);
+  for(const m of src){
+    conversation.push({role:m.role, content:m.content, ts:m.ts});
+    if(m.role==='assistant') renderMessage('assistant', m.content, {asMarkdown:true});
+    else renderMessage('user', m.content);
+  }
+  if(conversation.length===0) renderMessage('assistant','新的对话已就绪。向我描述你的课题吧。',{asMarkdown:true});
+  renderHistory();
+}
+
+/* ========= 内容格式化（最小增量） ========= */
+/* ### MOD: 统一塔罗解读输出结构，防止标题与内容粘连、数字项不换行等 */
+function formatTarotAnswer(raw){
+  if(!raw) return '';
+  let s = String(raw);
+
+  // 去除多余 ###、清理多余空格
+  s = s.replace(/^[ \t]*#{3,}\s*/gm, '');
+  s = s.replace(/[ \t]+$/gm, '');
+
+  // 确保关键段落前有空行
+  const sections = ['总结','卡牌解读','综合解析','行动建议','注意事项'];
+  for(const key of sections){
+    // 如果不是以 # 开头的标题，插入“## 标题”并确保前后有空行
+    s = s.replace(new RegExp(`(?:^|\\n)\\s*${key}\\s*[:：]?`, 'g'), (m)=>{
+      return `\n\n## ${key}\n`;
+    });
+  }
+
+  // 卡片行前断行并转成条目
+  // 例如：“卡 1 – …” / “卡1– …” / “卡1 – …”
+  s = s.replace(/(?:^|\n)\s*卡\s*([123])\s*[–-]\s*/g, (m, n)=>`\n- 卡 ${n} – `);
+
+  // 如果出现“1.”、“2.”、“3.”开头（行动建议常见），转换为无序列表
+  s = s.replace(/(?:^|\n)\s*([0-9]{1,2})\.\s*/g, '\n- ');
+
+  // 将紧贴标题的文本断行（避免“卡牌解读卡1…”）
+  s = s.replace(/(## [^\n]+)\s*(?=\S)/g, '$1\n');
+
+  // 统一箭头符号周围空格
+  s = s.replace(/\s*→\s*/g, ' → ');
+
+  // 收尾：去掉多余空行，保留段间距
+  s = s.replace(/\n{3,}/g, '\n\n').trim();
+
+  return s;
+}
+
+/* ========= SSE streaming ========= */
+async function streamAsk(question){
+  try{ if(abortCtrl) abortCtrl.abort(); }catch(_){ }
+  abortCtrl = new AbortController();
+
+  const userTurn = {role:'user', content:question, ts:nowISO()};
+  conversation.push(userTurn); renderMessage('user', question); saveConv();
+
+  let reasonUI = createReasoningBubble();
+  let answerBubbleEl = renderMessage('assistant','', {asMarkdown:true});
+  const aTurn = {role:'assistant', content:'', ts:nowISO()};
+  let reasonText = ''; let answerText = '';
+
+  setBusy(true);
+  try{
+    await initDialogIfNeeded();
+    const res = await fetch(`${BACKEND_URL}/api/chat/stream`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ runtime_id:RUNTIME_ID, dialog_id:DIALOG_ID, user_text: question, temperature: 0.2, top_p: 0.95 }),
+      signal: abortCtrl.signal
+    });
+    if(!res.ok || !res.body) throw new Error('连接异常');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = ''; let currentEvent = 'message'; let eventBuf = ''; let dataBuf = '';
+
+    const flushFrame = (event, data) => {
+      if(event === 'reason'){
+        reasonText += data; reasonUI.md.innerHTML = renderMarkdown(reasonText);
+      }else if(event === 'answer'){
+        answerText += data; answerBubbleEl.innerHTML = `<div class="md">${renderMarkdown(answerText)}</div>`;
+      }else if(event === 'error'){
+        answerText += `\n\n> ⚠️ **流式错误**：${data}`;
+        answerBubbleEl.innerHTML = `<div class=\"md\">${renderMarkdown(answerText)}</div>`;
+      }else if(event === 'done'){
+        /* ### MOD: 仅在完成时做一次“整篇格式化”，避免打断流式体验 */
+        const polished = formatTarotAnswer(answerText);
+        answerText = polished || answerText;
+        answerBubbleEl.innerHTML = `<div class="md">${renderMarkdown(answerText)}</div>`;
+
+        if(reasonUI && reasonUI.details.hasAttribute('open')){
+          reasonUI.details.removeAttribute('open'); reasonUI.tag.textContent = '已折叠';
+        }
+        setBusy(false);
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    };
+
+    while(true){
+      const {done, value} = await reader.read(); if(done) break;
+      buffer += decoder.decode(value, {stream:true});
+      let lineEnd;
+      while((lineEnd = buffer.indexOf('\n')) >= 0){
+        let line = buffer.slice(0, lineEnd); buffer = buffer.slice(lineEnd+1); line = line.replace(/\r$/, '');
+        if(line === ''){
+          const ev = eventBuf || currentEvent; const dat = dataBuf; if(dat !== '') flushFrame(ev, dat);
+          eventBuf = ''; dataBuf = ''; currentEvent = 'message'; continue;
+        }
+        if(line.startsWith('event:')){ eventBuf = line.slice(6).trim(); currentEvent = eventBuf || 'message'; }
+        else if(line.startsWith('data:')){ const piece = line.slice(5).trim(); dataBuf += (dataBuf ? '\n' : '') + piece; }
+      }
+    }
+
+    setBusy(false);
+    aTurn.content = answerText.trim();
+    if(aTurn.content){ conversation.push(aTurn); saveConv(); }
+  }catch(e){
+    setBusy(false);
+    if(!answerText){ answerBubbleEl.innerHTML = `<div class="md">${renderMarkdown('连接略有波折，请稍后再试。')}</div>`; }
+  }finally{ abortCtrl = null; }
+}
+
+/* ========= Chat actions ========= */
+async function send(){
+  if(thinking) return;
+  const text = (inputEl.value||'').trim(); if(!text) return;
+  inputEl.value = '';
+  await streamAsk(text);
+}
+function stopStreaming(){ try{ if(abortCtrl) abortCtrl.abort(); }catch(_){ } setBusy(false); }
+function clearConv(){
+  conversation = []; saveConv(); messagesEl.innerHTML='';
+  renderMessage('assistant','记忆清空。我会继续以右侧三张卡为基底与你同行。',{asMarkdown:true});
+}
+function exportConv(){
+  const payload = { runtime_id:RUNTIME_ID, dialog_id:DIALOG_ID, picks, conversation, exportedAt: nowISO() };
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `tarot_${DIALOG_ID}.json`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+/* ========= Boot ========= */
+(async function start(){
+  // history collapse state
+  const saved = localStorage.getItem(LS_HIST_COLLAPSED);
+  if(saved===null){ if(window.innerWidth < 860) setHistCollapsed(true); } else { setHistCollapsed(saved==='1'); }
+  histToggle.addEventListener('click', ()=> setHistCollapsed(!appRoot.classList.contains('hist-collapsed')));
+
+  // picks & memory
+  loadPicksFromLS(); renderMemory();
+
+  // ensure dialog exists
+  await initDialogIfNeeded();
+
+  // 加载既有对话（优先服务端）
+  try{
+    const res = await fetch(`${BACKEND_URL}/api/history?runtime_id=${encodeURIComponent(RUNTIME_ID)}&dialog_id=${encodeURIComponent(DIALOG_ID)}`);
+    if(res.ok){
+      const j = await res.json(); const serverHist = Array.isArray(j.history) ? j.history : [];
+      conversation = []; messagesEl.innerHTML='';
+      for(const m of serverHist){
+        conversation.push({role:m.role, content:m.content, ts:m.ts});
+        if(m.role==='assistant') renderMessage('assistant', m.content, {asMarkdown:true});
+        else renderMessage('user', m.content);
+      }
+    }else{ throw 0; }
+  }catch(_){
+    conversation = loadConvLocal(DIALOG_ID); messagesEl.innerHTML='';
+    for(const m of conversation){ if(m.role==='assistant') renderMessage('assistant', m.content, {asMarkdown:true}); else renderMessage('user', m.content); }
+  }
+  if(conversation.length===0){ renderMessage('assistant','欢迎回来。向我描述你的处境与期待，我们从此刻展开指引。',{asMarkdown:true}); }
+
+  // 事件绑定
+  btnSend.addEventListener('click', send);
+  inputEl.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); }});
+  btnClear.addEventListener('click', clearConv);
+  btnStop.addEventListener('click', stopStreaming);
+  btnExport.addEventListener('click', e=>{ e.preventDefault(); exportConv(); });
+  btnRefreshHist.addEventListener('click', fetchHistoryList);
+
+  // 网络状态指示
+  window.addEventListener('online', ()=>{statusDot.style.background='var(--ok)';statusText.textContent='在线'});
+  window.addEventListener('offline', ()=>{statusDot.style.background='var(--err)';statusText.textContent='离线'});
+
+  // 获取服务端对话索引（轻量防抖）
+  let histTimer=null; const askHist=()=>{ clearTimeout(histTimer); histTimer=setTimeout(fetchHistoryList, 120); };
+  askHist();
+})();
+</script>
+</body>
+</html>

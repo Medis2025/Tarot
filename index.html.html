@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🎴 Tarot</title>
+<style>
+:root{
+  --bg1:#f9f9ff;--bg2:#eef2ff;--bg3:#e0e7ff;
+  --glass:rgba(255,255,255,.35);--line:rgba(255,255,255,.45);
+  --text:#1e1b4b;--muted:#5b5b8a;--accent:#a78bfa;--gold:#fcd34d;
+}
+*{box-sizing:border-box}
+html,body{
+  height:100%;margin:0;color:var(--text);
+  background:
+    radial-gradient(150% 150% at 80% 10%, #a5b4fc 0%, transparent 40%),
+    radial-gradient(150% 150% at 20% 90%, #fbcfe8 0%, transparent 40%),
+    linear-gradient(135deg,var(--bg1),var(--bg2) 40%, var(--bg3));
+  font-family:"Poppins","PingFang SC","Microsoft YaHei",sans-serif;
+  overflow:hidden;
+}
+.wrap{height:100%;display:grid;place-items:center;padding:24px}
+.board{width:min(980px,96vw)}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+header h1{margin:0;font-size:clamp(20px,3.4vw,36px);letter-spacing:.5px;
+  background:linear-gradient(90deg,#8b5cf6,#0ea5e9);
+  -webkit-background-clip:text;color:transparent;}
+.chip{background:var(--glass);padding:8px 12px;border-radius:999px;color:var(--muted);
+  font-weight:700;backdrop-filter:blur(12px);border:1px solid var(--line)}
+.panel{background:var(--glass);border:1px solid var(--line);border-radius:20px;
+  box-shadow:0 20px 60px rgba(180,180,255,.3),inset 0 0 0 1px rgba(255,255,255,.5);
+  backdrop-filter:blur(16px)}
+.stage{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
+.table{height:520px;position:relative;overflow:hidden;border-radius:20px;}
+.felt{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(100% 120% at 50% 10%, rgba(255,255,255,.8), rgba(230,230,255,.4)),
+    linear-gradient(135deg, rgba(255,255,255,.7), rgba(220,240,255,.4));
+  /* NEW: ensure it never blocks clicks */
+  pointer-events:none;
+}
+.light{
+  position:absolute;inset:auto 0 0 0;height:140px;filter:blur(40px);opacity:.7;
+  background:radial-gradient(closest-side, rgba(167,139,250,.35), transparent 80%);
+  /* NEW: ensure it never blocks clicks */
+  pointer-events:none;
+}
+.deckArea{position:absolute;left:50%;top:54%;transform:translate(-50%,-50%);
+  width:640px;height:380px;perspective:1200px;}
+.deck{position:absolute;inset:0;transform-style:preserve-3d;
+  /* NEW: keep cards on top of felt/light */
+  z-index:10;}
+.card{
+  position:absolute;width:180px;height:260px;border-radius:18px;padding:14px;
+  display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;
+  color:#1e1b4b;font-weight:900;
+  background:linear-gradient(145deg,#fff,#f0f7ff 60%,#fafaff);
+  box-shadow:0 12px 40px rgba(200,200,255,.35);
+  transform-style:preserve-3d;backface-visibility:hidden;
+  transition:transform .25s ease, box-shadow .3s ease, filter .3s ease, opacity .4s ease;
+  cursor:pointer;
+}
+.card.back{
+  background:
+    radial-gradient(120% 100% at 30% 20%, rgba(255,255,255,.9), rgba(230,230,255,.25)),
+    repeating-radial-gradient(circle at 50% 50%, rgba(167,139,250,.25) 0 2px, transparent 2px 6px),
+    linear-gradient(145deg,rgba(255,255,255,0.65),rgba(230,230,255,0.2));
+  border:1px solid rgba(255,255,255,0.5);
+  box-shadow:0 8px 24px rgba(180,180,255,.35),inset 0 0 60px rgba(255,255,255,.4);
+  backdrop-filter:blur(8px);
+}
+.card.back .tag,.card.back .title,.card.back .tiny{display:none}
+.card .sigil{
+  position:absolute;inset:0;display:grid;place-items:center;
+  font-size:40px;letter-spacing:4px;color:#6b7280;opacity:.6;
+  text-shadow:0 1px 0 rgba(255,255,255,.5);
+}
+.card.selected{box-shadow:0 0 0 3px var(--gold), 0 12px 40px rgba(252,211,77,.45)!important; transform:translateY(-6px)}
+.card.focused{transform:scale(1.08);}
+.card .tag{font-size:12px;letter-spacing:.6px;color:#64748b;opacity:.8}
+.card .title{font-size:18px;line-height:1.15}
+.card .emoji{font-size:36px}
+.card .tiny{font-size:12px;font-weight:700;color:#6b7280}
+.card::after{content:"";position:absolute;inset:0;border-radius:18px;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.4),inset 0 -120px 120px rgba(147,197,253,.16);}
+.shadow{position:absolute;width:180px;height:24px;left:0;top:0;
+  transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(closest-side,rgba(255,255,255,.45),transparent 65%);
+  filter:blur(6px);opacity:0.4;pointer-events:none;}
+.ctrl{padding:16px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{appearance:none;border:none;border-radius:12px;padding:12px 16px;font-weight:900;
+  letter-spacing:.4px;cursor:pointer;color:#1e1b4b;
+  background:linear-gradient(180deg,#fde68a,#fcd34d);
+  box-shadow:0 8px 20px rgba(250,204,21,.35);
+  transition:transform .15s ease;}
+.btn:hover{transform:translateY(-2px)}
+.btn.secondary{
+  background:linear-gradient(180deg,#c7d2fe,#a5b4fc);
+  box-shadow:0 8px 20px rgba(147,197,253,.35);
+}
+.btn.good{background:linear-gradient(180deg,#86efac,#34d399); box-shadow:0 8px 20px rgba(52,211,153,.35)}
+.label{min-width:80px;color:var(--muted)}
+input[type=range]{border-radius:10px;padding:0;width:160px;background:transparent}
+.log{padding:10px 14px;border-radius:12px;background:rgba(255,255,255,.4);
+  font-size:13px;color:#1e1b4b;}
+footer{margin-top:12px;display:flex;align-items:center;justify-content:space-between;color:#4b5563}
+.kv{margin-top:6px;font-size:13px;color:#374151}
+.kv b{color:#111827}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.4); font-size:12px}
+.badge .dot{width:8px;height:8px;border-radius:50%;background:#10b981}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="board">
+    <header>
+      <h1>🎴 Tarot</h1>
+      <div class="chip" id="status">轻按开始，倾听心意</div>
+    </header>
+    <div class="stage">
+      <section class="panel table">
+        <div class="felt"></div>
+        <div class="deckArea"><div class="deck" id="deck"></div></div>
+        <div class="light"></div>
+      </section>
+      <section class="panel ctrl">
+        <div class="row">
+          <span class="label">指引：</span>
+          <span class="badge"><span class="dot"></span>发 5 张背面卡 → 直觉点选 3 张 → 未选轻落 → 选中翻开呈现</span>
+        </div>
+        <div class="row">
+          <button class="btn" id="deal">🃏 发 5 张</button>
+          <button class="btn secondary" id="reset">♻️ 重新来过</button>
+          <button class="btn good" id="next" disabled>➡️ 进入对话</button>
+        </div>
+        <div class="row">
+          <span class="label">动画：</span>
+          <input id="speed" type="range" min="0.5" max="2.0" step="0.1" value="1.0"/><span id="speedVal">1.0×</span>
+        </div>
+        <div class="log" id="log">深呼吸，专注你的当下问题。随手抽牌，听心的答案。</div>
+        <div class="kv" id="kv"></div>
+        <script id="tarot_picks_json" type="application/json">{}</script>
+      </section>
+    </div>
+    <footer><div>直觉为灯</div><div>5 选 3 · 面朝下选择</div></footer>
+  </div>
+</div>
+
+<script>
+/* ====== 路径配置 ====== */
+const TAROT_JSON_URL = "/cluster/home/gw/Backend_project/layout/scripts/visualLM/label_LayoutLM/layout_nodes/tune_bert/lalora/Tarot/Cards.json";
+const RAG_HTML_URL   = "tarot_rag.html";
+const BACKEND_URL    = "";
+
+/* ====== 会话 ====== */
+function getOrCreateRuntimeId(){
+  const k = 'tarot_runtime_id';
+  const old = localStorage.getItem(k);
+  if (old) return old;
+  const id = 'run-' + Date.now();
+  localStorage.setItem(k, id);
+  return id;
+}
+function newDialogId(){
+  return 'dlg-' + Math.random().toString(36).slice(2,8) + '-' + Date.now().toString().slice(-6);
+}
+let RUNTIME_ID = getOrCreateRuntimeId();
+let DIALOG_ID  = newDialogId();
+
+/* ====== 后备演示卡组 ====== */
+const FALLBACK_JSON = {
+  "Major_Arcana": [
+    {"number": 0, "name_en": "The Fool", "name_zh": "愚者", "upright": "新的开始、冒险、天真、信任直觉", "reversed": "鲁莽、逃避现实、缺乏计划"},
+    {"number": 1, "name_en": "The Magician", "name_zh": "魔术师", "upright": "创造力、意志、掌控、实现潜能", "reversed": "欺骗、滥用能力、缺乏自信"},
+    {"number": 2, "name_en": "The High Priestess", "name_zh": "女祭司", "upright": "直觉、潜意识、智慧、神秘", "reversed": "压抑情感、误导、秘密曝光"},
+    {"number": 3, "name_en": "The Empress", "name_zh": "皇后", "upright": "丰饶、母性、美感、创造", "reversed": "依赖、懒散、过度保护"},
+    {"number": 4, "name_en": "The Emperor", "name_zh": "皇帝", "upright": "权威、结构、领导、稳定", "reversed": "独裁、压抑、滥用权力"},
+    {"number": 5, "name_en": "The Hierophant", "name_zh": "教皇", "upright": "传统、信仰、学习、指导", "reversed": "盲从、质疑传统、思想僵化"},
+    {"number": 6, "name_en": "The Lovers", "name_zh": "恋人", "upright": "爱情、选择、和谐关系", "reversed": "误会、诱惑、分歧"},
+    {"number": 7, "name_en": "The Chariot", "name_zh": "战车", "upright": "胜利、控制、自律、意志力", "reversed": "失控、冲动、方向不明"},
+    {"number": 8, "name_en": "Strength", "name_zh": "力量", "upright": "勇气、自信、耐心、内在力量", "reversed": "恐惧、脆弱、自我怀疑"},
+    {"number": 9, "name_en": "The Hermit", "name_zh": "隐者", "upright": "内省、独处、智慧、真理探索", "reversed": "孤立、逃避、迷茫"},
+    {"number": 10, "name_en": "Wheel of Fortune", "name_zh": "命运之轮", "upright": "机遇、循环、命运转折", "reversed": "厄运、抗拒改变、失控"},
+    {"number": 11, "name_en": "Justice", "name_zh": "正义", "upright": "公平、真相、因果、平衡", "reversed": "偏见、不公、逃避责任"},
+    {"number": 12, "name_en": "The Hanged Man", "name_zh": "倒吊人", "upright": "牺牲、放下、转换视角", "reversed": "固执、逃避牺牲、停滞不前"},
+    {"number": 13, "name_en": "Death", "name_zh": "死亡", "upright": "结束与重生、转变、放下过去", "reversed": "抗拒改变、延迟结束"},
+    {"number": 14, "name_en": "Temperance", "name_zh": "节制", "upright": "平衡、协调、疗愈、耐心", "reversed": "失衡、极端、冲突"},
+    {"number": 15, "name_en": "The Devil", "name_zh": "恶魔", "upright": "束缚、欲望、诱惑、物质主义", "reversed": "觉醒、解放、摆脱成瘾"},
+    {"number": 16, "name_en": "The Tower", "name_zh": "高塔", "upright": "突变、崩塌、真相揭露", "reversed": "拖延灾难、否认现实"},
+    {"number": 17, "name_en": "The Star", "name_zh": "星星", "upright": "希望、疗愈、灵感、信任未来", "reversed": "失望、怀疑、自怜"},
+    {"number": 18, "name_en": "The Moon", "name_zh": "月亮", "upright": "直觉、幻觉、潜意识、梦境", "reversed": "混乱、欺骗、焦虑"},
+    {"number": 19, "name_en": "The Sun", "name_zh": "太阳", "upright": "成功、快乐、活力、清晰", "reversed": "延迟、骄傲、虚伪的快乐"},
+    {"number": 20, "name_en": "Judgement", "name_zh": "审判", "upright": "觉醒、救赎、反思、自我评估", "reversed": "后悔、自我否定、拒绝改变"},
+    {"number": 21, "name_en": "The World", "name_zh": "世界", "upright": "完成、圆满、成就、整合", "reversed": "停滞、未完成、缺乏闭合"}
+  ],
+  "Minor_Arcana": {
+    "Wands": [
+      {"name": "Ace of Wands", "upright": "灵感、机遇、创意的开端", "reversed": "方向不明、延迟、缺乏动力"},
+      {"name": "Two of Wands", "upright": "计划、远见、选择", "reversed": "犹豫、不安、缺乏决断"},
+      {"name": "Three of Wands", "upright": "远景、扩展、成功的期望", "reversed": "延迟、受阻、短视"},
+      {"name": "Four of Wands", "upright": "庆祝、安定、家庭和谐", "reversed": "不安、暂时的平静"},
+      {"name": "Five of Wands", "upright": "竞争、冲突、挑战", "reversed": "避免冲突、混乱、分裂"},
+      {"name": "Six of Wands", "upright": "胜利、认可、自信", "reversed": "失败、骄傲、失望"},
+      {"name": "Seven of Wands", "upright": "防御、坚持、勇气", "reversed": "放弃、犹豫、防御失败"},
+      {"name": "Eight of Wands", "upright": "快速行动、旅行、进展", "reversed": "延迟、混乱、障碍"},
+      {"name": "Nine of Wands", "upright": "坚韧、防御、毅力", "reversed": "疲惫、倦怠、放弃"},
+      {"name": "Ten of Wands", "upright": "负担、责任、努力达成", "reversed": "压力过大、崩溃、逃避"},
+      {"name": "Page of Wands", "upright": "热情、学习新事物、创造性想法", "reversed": "幼稚、鲁莽、轻率"},
+      {"name": "Knight of Wands", "upright": "冒险、激情、行动", "reversed": "冲动、不安、无目标"},
+      {"name": "Queen of Wands", "upright": "自信、魅力、领导力", "reversed": "嫉妒、虚伪、自我中心"},
+      {"name": "King of Wands", "upright": "远见、激励他人、掌控局面", "reversed": "傲慢、冲动、滥用权力"}
+    ],
+    "Cups": [
+      {"name": "Ace of Cups", "upright": "情感新生、爱、直觉", "reversed": "情感压抑、分离、冷漠"},
+      {"name": "Two of Cups", "upright": "结合、伙伴关系、爱情", "reversed": "误会、争执、关系破裂"},
+      {"name": "Three of Cups", "upright": "友谊、庆祝、社交", "reversed": "过度依赖、背叛、分裂"},
+      {"name": "Four of Cups", "upright": "沉思、不满、内省", "reversed": "觉醒、重新开始、机会"},
+      {"name": "Five of Cups", "upright": "失落、悲伤、后悔", "reversed": "释怀、重新振作、希望"},
+      {"name": "Six of Cups", "upright": "怀旧、回忆、童年", "reversed": "逃避现实、过度沉溺过去"},
+      {"name": "Seven of Cups", "upright": "幻想、诱惑、选择", "reversed": "清醒、现实、专注"},
+      {"name": "Eight of Cups", "upright": "离开、寻找真理、放弃", "reversed": "犹豫、逃避、回头"},
+      {"name": "Nine of Cups", "upright": "满足、幸福、愿望成真", "reversed": "贪婪、自满、不满足"},
+      {"name": "Ten of Cups", "upright": "幸福家庭、和谐、圆满", "reversed": "不和、破裂、虚伪幸福"},
+      {"name": "Page of Cups", "upright": "创意、浪漫、情感启蒙", "reversed": "逃避、情绪不稳、空想"},
+      {"name": "Knight of Cups", "upright": "浪漫、理想主义、追梦", "reversed": "欺骗、虚伪、失望"},
+      {"name": "Queen of Cups", "upright": "温柔、理解、直觉强", "reversed": "情绪化、依赖、逃避"},
+      {"name": "King of Cups", "upright": "智慧、情感成熟、平衡", "reversed": "冷漠、控制欲、压抑情感"}
+    ],
+    "Swords": [
+      {"name": "Ace of Swords", "upright": "真相、理性、突破", "reversed": "混乱、误导、犹豫"},
+      {"name": "Two of Swords", "upright": "平衡、犹豫、选择", "reversed": "决策、真相揭示、困境"},
+      {"name": "Three of Swords", "upright": "心碎、分离、痛苦", "reversed": "疗愈、恢复、和解"},
+      {"name": "Four of Swords", "upright": "休息、恢复、沉思", "reversed": "焦虑、过劳、无法放松"},
+      {"name": "Five of Swords", "upright": "冲突、背叛、胜利的代价", "reversed": "和解、反思、结束纷争"},
+      {"name": "Six of Swords", "upright": "过渡、离开困境、旅行", "reversed": "停滞、抗拒、逃避现实"},
+      {"name": "Seven of Swords", "upright": "策略、隐秘行动、智慧", "reversed": "揭露、失误、坦诚"},
+      {"name": "Eight of Swords", "upright": "束缚、限制、恐惧", "reversed": "解放、勇气、清醒"},
+      {"name": "Nine of Swords", "upright": "焦虑、噩梦、忧虑", "reversed": "解脱、恢复、希望"},
+      {"name": "Ten of Swords", "upright": "终结、崩溃、背叛", "reversed": "重生、恢复、放下"},
+      {"name": "Page of Swords", "upright": "好奇、机智、沟通", "reversed": "挑剔、八卦、轻率"},
+      {"name": "Knight of Swords", "upright": "果断、行动力、冲劲", "reversed": "冲动、急躁、鲁莽"},
+      {"name": "Queen of Swords", "upright": "理性、独立、洞察", "reversed": "冷漠、孤立、偏执"},
+      {"name": "King of Swords", "upright": "智慧、权威、逻辑", "reversed": "滥权、冷酷、刻板"}
+    ],
+    "Pentacles": [
+      {"name": "Ace of Pentacles", "upright": "财富机遇、稳定开端", "reversed": "错失机会、延迟、浪费"},
+      {"name": "Two of Pentacles", "upright": "平衡、灵活、适应", "reversed": "混乱、超负荷、优先失调"},
+      {"name": "Three of Pentacles", "upright": "合作、技能、努力成果", "reversed": "缺乏团队、疏忽、低效"},
+      {"name": "Four of Pentacles", "upright": "控制、节俭、安全感", "reversed": "贪婪、恐惧失去、固执"},
+      {"name": "Five of Pentacles", "upright": "贫困、孤立、考验", "reversed": "恢复、援助、希望"},
+      {"name": "Six of Pentacles", "upright": "给予、平衡、慷慨", "reversed": "不平等、自私、债务"},
+      {"name": "Seven of Pentacles", "upright": "耐心、评估、收获前的等待", "reversed": "不耐烦、无成果、浪费"},
+      {"name": "Eight of Pentacles", "upright": "勤奋、专注、学习", "reversed": "懒散、粗心、缺乏技巧"},
+      {"name": "Nine of Pentacles", "upright": "独立、富足、自信", "reversed": "依赖、奢侈、孤单"},
+      {"name": "Ten of Pentacles", "upright": "传承、家庭财富、成功", "reversed": "损失、冲突、继承问题"},
+      {"name": "Page of Pentacles", "upright": "学习、机会、计划", "reversed": "懒惰、拖延、缺乏专注"},
+      {"name": "Knight of Pentacles", "upright": "责任感、稳定、耐心", "reversed": "停滞、顽固、过于保守"},
+      {"name": "Queen of Pentacles", "upright": "务实、关怀、富足", "reversed": "焦虑、过度劳累、缺乏安全感"},
+      {"name": "King of Pentacles", "upright": "成功、稳定、物质成就", "reversed": "贪婪、僵化、自私"}
+    ]
+  }
+}
+;
+
+/* ====== suit emoji ====== */
+const SUIT_EMOJI = {"Major":"🃏","Wands":"🔥","Cups":"💧","Swords":"⚔️","Pentacles":"🪙"};
+
+/* ====== 常量 ====== */
+const DEAL_SIZE = 5;
+const PICKS_REQUIRED = 3;
+
+/* ====== 状态 ====== */
+let TAROT_DB = null, TAROT_CARDS = [], TABLE_CARDS = [], CHOSEN = [];
+let busy = false, loading = false, ANIM_SPEED = 1.0, audioCtx;
+
+const deckRoot = document.getElementById('deck'),
+      statusEl = document.getElementById('status'),
+      logEl = document.getElementById('log'),
+      kvEl = document.getElementById('kv'),
+      btnDeal = document.getElementById('deal'),
+      btnReset = document.getElementById('reset'),
+      btnNext = document.getElementById('next'),
+      speedSlider = document.getElementById('speed'),
+      speedVal = document.getElementById('speedVal'),
+      picksJsonEl = document.getElementById('tarot_picks_json');
+
+/* ====== 小音效 ====== */
+function ping(f=880,d=0.06,v=0.08){
+  try{
+    audioCtx ||= new (window.AudioContext||window.webkitAudioContext)();
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.type='triangle';o.frequency.value=f;g.gain.value=v;
+    o.connect(g).connect(audioCtx.destination);o.start();
+    setTimeout(()=>o.stop(),d*1000);
+  }catch(e){}
+}
+
+/* ====== 数据整形（容错） ====== */
+function safeStr(x, d=""){ return (typeof x === "string" ? x : (x==null?d:String(x))); }
+function normalizeTarot(json){
+  const out=[];
+  try{
+    if(Array.isArray(json.Major_Arcana)){
+      for(const m of json.Major_Arcana){
+        if(m==null) continue;
+        const num = Number(m.number);
+        const nameEn = safeStr(m.name_en, "");
+        const nameZh = safeStr(m.name_zh, "");
+        out.push({
+          id:`major-${isFinite(num)?num:nameEn||nameZh||'X'}`,
+          title:nameEn || nameZh || `Major ${isFinite(num)?num:'?'}`,
+          title_zh:nameZh || nameEn || `主牌 ${isFinite(num)?num:'?'}`,
+          arcana:"Major", suit:"Major", rank:isFinite(num)?num:0,
+          upright:safeStr(m.upright), reversed:safeStr(m.reversed), emoji:SUIT_EMOJI["Major"]
+        });
+      }
+    }
+    const minors=json.Minor_Arcana||{};
+    for(const suit of ["Wands","Cups","Swords","Pentacles"]){
+      const arr=minors[suit]||[];
+      for(const it of arr){
+        if(it==null) continue;
+        const nm = safeStr(it.name, "");
+        if(!nm) continue;
+        out.push({
+          id:`${suit}-${nm}`,
+          title:nm,
+          title_zh:safeStr(it.name_zh, nm),
+          arcana:"Minor", suit, rank:nm.split(" ")[0],
+          upright:safeStr(it.upright), reversed:safeStr(it.reversed), emoji:SUIT_EMOJI[suit]
+        });
+      }
+    }
+  }catch(e){
+    console.error("normalizeTarot error:", e);
+  }
+  return out;
+}
+
+/* ====== 加载卡组（严格时序 + 锁按钮） ====== */
+async function loadTarotDB(){
+  if(loading) return TAROT_CARDS.length>0;
+  loading = true;
+  btnDeal.disabled = true; btnDeal.textContent = "⏳ 正在载入…";
+  try{
+    const res = await fetch(TAROT_JSON_URL, {cache:"no-store"});
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();         // Acknowledged: matches your provided format
+    TAROT_DB = data;
+    TAROT_CARDS = normalizeTarot(TAROT_DB);
+    statusEl.textContent = `已载入 ${TAROT_CARDS.length} 张卡牌（外部 JSON）`;
+    if(!TAROT_CARDS.length) throw new Error("卡组为空（解析后）");
+    return true;
+  }catch(e){
+    console.warn("外部 Cards.json 读取失败，使用内置后备：", e);
+    TAROT_DB = FALLBACK_JSON;
+    TAROT_CARDS = normalizeTarot(FALLBACK_JSON);
+    statusEl.textContent = '已启用内置卡组（后备）';
+    logEl.textContent = '外部 Cards.json 读取失败或为空。';
+    return true; // 继续流程
+  }finally{
+    btnDeal.disabled = false; btnDeal.textContent = "🃏 发 5 张";
+    loading = false;
+  }
+}
+
+/* ====== 动画工具 ====== */
+function placeCard(el,sh,x,y,rot,z=0){
+  el.style.transform=`translate(${x-90}px,${y-130}px) rotate(${rot}deg) translateZ(${z}px)`;
+  sh.style.left=x+'px'; sh.style.top=(y+120)+'px';
+  sh.style.opacity=Math.max(0,Math.min(1,(z/160)));
+  sh.style.transform=`translate(-50%,-50%) scale(${1+z/220})`;
+}
+function animateP(d,step){
+  d/=ANIM_SPEED;
+  return new Promise(r=>{
+    const t0=performance.now();
+    (function a(t){
+      const k=Math.min(1,(t-t0)/d);
+      step(k);
+      k<1?requestAnimationFrame(a):r();
+    })(performance.now());
+  });
+}
+const lerp=(a,b,t)=>a+(b-a)*t;
+const easeOutCubic=t=>1-Math.pow(1-t,3);
+
+/* ====== 随机 ====== */
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+function randomOrientation(){ return Math.random()<0.5 ? 'upright' : 'reversed'; }
+
+/* ====== 结果 JSON ====== */
+function xId(meta){ return meta.id || `${meta.suit||meta.arcana}-${meta.title}`; }
+function buildResultJSON(){
+  return {
+    timestamp: new Date().toISOString(),
+    runtime_id: RUNTIME_ID,
+    dialog_id: DIALOG_ID,
+    picks: CHOSEN.map(x=>({
+      id: xId(x.card),
+      name_en: x.card.title,
+      name_zh: x.card.title_zh || x.card.title,
+      suit: x.card.suit,
+      arcana: x.card.arcana,
+      orientation: x.orientation,
+      meaning: (x.orientation==='upright'?x.card.upright:x.card.reversed)||""
+    }))
+  };
+}
+function updatePicksJSON(){
+  const payload = (CHOSEN.length ? buildResultJSON() : {});
+  picksJsonEl.textContent = JSON.stringify(payload, null, 2);
+}
+
+/* ====== 发 5 张背面 ====== */
+async function dealFive(){
+  if(busy) return;
+  if(!TAROT_CARDS.length){ console.warn('卡组为空，取消发牌'); return; }
+  busy = true;
+  try{
+    btnNext.disabled=true; CHOSEN.length=0; kvEl.textContent="";
+    deckRoot.innerHTML=''; TABLE_CARDS.length=0;
+    updatePicksJSON();
+
+    const five=shuffle(TAROT_CARDS).slice(0,DEAL_SIZE);
+    const center={x:320,y:180};
+    for(const d of five){
+      const el=document.createElement('div'); el.className='card back';
+      el.innerHTML=`<div class="sigil">✦ ✧ ✦</div>`;
+      const sh=document.createElement('div'); sh.className='shadow';
+      deckRoot.append(sh,el);
+      placeCard(el,sh,center.x,center.y,Math.random()*10-5,0);
+      TABLE_CARDS.push({el,sh,meta:d,x:center.x,y:center.y,rot:(Math.random()*8-4),picked:false});
+    }
+
+    const startX=80, spacing=110, baseY=250;
+    statusEl.textContent='静心凝视，选择与你对话的三张。';
+    logEl.textContent='轻触卡面完成选择。';
+
+    for(let i=0;i<TABLE_CARDS.length;i++){
+      const c=TABLE_CARDS[i];
+      c.el.style.zIndex=100+i;
+      await animateP(380,t=>{
+        const e=easeOutCubic(t);
+        const x=lerp(c.x,startX+i*spacing,e);
+        const y=lerp(c.y,baseY,e);
+        const rot=lerp(c.rot,(i-2)*4,e);
+        placeCard(c.el,c.sh,x,y,rot,60*Math.sin(e*Math.PI));
+        c.el.style.opacity=1;
+      });
+      // ensure on top & clickable
+      c.el.style.pointerEvents = 'auto';
+      c.el.onclick=()=>onPick(c);
+    }
+  }catch(err){
+    console.error("dealFive error:", err);
+    logEl.textContent = '发牌失败：' + err;
+  }finally{
+    busy=false;
+  }
+}
+
+/* ====== 选择 3 张 ====== */
+function onPick(card){
+  if(card.picked || CHOSEN.length>=PICKS_REQUIRED) return;
+  card.picked=true;
+  card.el.classList.add('selected');
+  CHOSEN.push({ card:card.meta, orientation:randomOrientation() });
+  ping(640,.05,.07);
+
+  const remain=PICKS_REQUIRED-CHOSEN.length;
+  statusEl.textContent = remain>0 ? `已选 ${CHOSEN.length} 张，还需 ${remain} 张` : `选择完成`;
+
+  updatePicksJSON();
+
+  if(CHOSEN.length===PICKS_REQUIRED){
+    TABLE_CARDS.forEach(c=>{ if(!c.picked) c.el.onclick=null; });
+    dropUnselectedAndFocus();
+  }
+}
+
+/* ====== 未选下落，已选居中 ====== */
+async function dropUnselectedAndFocus(){
+  busy=true;
+  const unpicked = TABLE_CARDS.filter(c=>!c.picked);
+  const picked   = TABLE_CARDS.filter(c=>c.picked);
+
+  await Promise.all(unpicked.map(c => animateP(520, t => {
+    const e = easeOutCubic(t);
+    const ny = c.y + e*220;
+    c.el.style.opacity = 1 - e;
+    c.el.style.filter = `blur(${e*2.5}px) grayscale(${e*.3})`;
+    placeCard(c.el, c.sh, c.x, ny, c.rot, 0);
+  })));
+  unpicked.forEach(c => { c.el.remove(); c.sh.remove(); });
+
+  const baseY = 190, spacing = 170, total = picked.length;
+  const startX = 320 - ((total-1)*spacing)/2;
+
+  for (let i=0;i<picked.length;i++){
+    const c = picked[i];
+    c.el.classList.add('focused');
+    c.el.style.zIndex = 200 + i;
+    const targetX = startX + i*spacing;
+    const targetY = baseY;
+    await animateP(420, t => {
+      const e = easeOutCubic(t);
+      const x = lerp(c.x, targetX, e);
+      const y = lerp(c.y, targetY, e);
+      const rot = lerp(c.rot, 0, e);
+      placeCard(c.el, c.sh, x, y, rot, 60 * Math.sin(e*Math.PI));
+      c.el.style.opacity = 1;
+    });
+    c.x = startX + i*spacing; c.y = baseY; c.rot = 0;
+  }
+
+  await revealChosenCentered(picked);
+  busy=false;
+}
+
+/* ====== 翻开三张 ====== */
+async function revealChosenCentered(picked){
+  logEl.textContent='卡面即景，寓意将至。';
+  for(const c of picked){
+    const chosen = CHOSEN.find(k=>xId(k.card)===xId(c.meta));
+    if(!chosen) continue;
+    const orient = chosen.orientation;
+    const baseTransform = c.el.style.transform || '';
+
+    await animateP(220, t=>{
+      const angle = 90 * t;
+      c.el.style.transform = `${baseTransform} rotateY(${angle}deg) scale(1.04)`;
+    });
+
+    c.el.classList.remove('back');
+    const title = c.meta.title_zh || c.meta.title;
+    const meaning = (orient==='upright' ? c.meta.upright : c.meta.reversed) || '';
+    c.el.innerHTML = `
+      <div class="tag">${c.meta.suit || c.meta.arcana} · ${orient==='upright'?'正位':'逆位'}</div>
+      <div class="title">${title}</div>
+      <div class="emoji">${c.meta.emoji || '🃏'}</div>
+      <div class="tiny">${meaning.slice(0,28)}${meaning.length>28?'…':''}</div>
+    `;
+
+    await animateP(220, t=>{
+      const angle = 90 + 90 * t;
+      c.el.style.transform = `${baseTransform} rotateY(${angle}deg) scale(1.08)`;
+    });
+    c.el.style.transform = `${baseTransform} scale(1.08)`;
+  }
+
+  const summary = CHOSEN.map((x,i)=>`${i+1}. ${x.card.title_zh||x.card.title}（${x.orientation==='upright'?'正位':'逆位'}）`).join('； ');
+  statusEl.textContent = '三象已现';
+  logEl.textContent = '点击「进入对话」，让答案缓缓展开。';
+  kvEl.innerHTML = `<b>选中：</b> ${summary}`;
+
+  updatePicksJSON();
+  btnNext.disabled = false;
+}
+
+/* ====== 进入对话 ====== */
+async function enterConversation(){
+  if(CHOSEN.length !== 3){ alert('请先选满 3 张卡牌。'); return; }
+  const result = buildResultJSON();
+  const picks = result.picks;
+
+  localStorage.setItem('tarot_picks', JSON.stringify(result));
+  localStorage.setItem('tarot_runtime_id', RUNTIME_ID);
+  DIALOG_ID = newDialogId();
+  localStorage.setItem('tarot_dialog_id', DIALOG_ID);
+
+  updatePicksJSON();
+
+  try{
+    const r = await fetch(`${BACKEND_URL}/api/dialog/init`, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ runtime_id: RUNTIME_ID, dialog_id: DIALOG_ID, cards: picks })
+    });
+    if(!r.ok){
+      console.warn('Init failed', await r.text());
+    }
+  }catch(e){ console.warn('Backend not reachable for init.', e); }
+
+  window.location.href = RAG_HTML_URL;
+}
+
+/* ====== 交互绑定（严格等待加载） ====== */
+btnDeal.addEventListener('click', async ()=>{
+  if(busy || loading) return;
+  const ok = await loadTarotDB();
+  if(ok && TAROT_CARDS.length>0) await dealFive();
+});
+
+btnReset.addEventListener('click',()=>{
+  TABLE_CARDS.length=0; CHOSEN.length=0; deckRoot.innerHTML='';
+  kvEl.textContent=''; statusEl.textContent='轻按开始，倾听心意'; logEl.textContent='深呼吸，专注你的当下问题。';
+  btnNext.disabled=true;
+  updatePicksJSON();
+});
+
+btnNext.addEventListener('click', enterConversation);
+speedSlider.addEventListener('input',e=>{ ANIM_SPEED=parseFloat(e.target.value); speedVal.textContent=ANIM_SPEED.toFixed(1)+'×'; });
+
+/* ====== 启动 ====== */
+(async function start(){
+  speedVal.textContent = speedSlider.value+'×';
+  statusEl.textContent='卡组就绪（点击发 5 张）';
+  updatePicksJSON();
+})();
+</script>
+</body>
+</html>
